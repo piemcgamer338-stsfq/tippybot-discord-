@@ -739,11 +739,11 @@ async def rain_command(ctx, amount=None, duration=None):
     )
 
 
-# =========================================================
+`"
+    )# =========================================================
 # ADD BALANCE
 # OWNER ONLY
 # =========================================================
-
 @bot.command(name="addbal")
 @owner_only()
 async def add_balance_command(
@@ -788,8 +788,8 @@ async def add_balance_command(
         f"User: {member.mention}\n"
         f"Added: `${usd:.2f}` USD\n"
         f"Asset: `{crypto.upper()}`\n"
-        f"Simulated amount: `{format_crypto(crypto_amount)} "
-        f"{crypto.upper()}`"
+        f"Simulated amount: "
+        f"`{format_crypto(crypto_amount)} {crypto.upper()}`"
     )
 
     embed.set_footer(text="OWNER CONTROL")
