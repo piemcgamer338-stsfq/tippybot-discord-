@@ -738,8 +738,6 @@ async def rain_command(ctx, amount=None, duration=None):
         )
     )
 
-
-`"
     )# =========================================================
 # ADD BALANCE
 # OWNER ONLY
