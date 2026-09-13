@@ -12,19 +12,48 @@ from discord.ext import commands
 # =========================================================
 
 TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = int(os.getenv("OWNER_ID", "0"))
+OWNER_ID_RAW = os.getenv("OWNER_ID")
+
+if not TOKEN:
+    raise RuntimeError(
+        "BOT_TOKEN environment variable is missing. "
+        "Add BOT_TOKEN to Railway Variables."
+    )
+
+if not OWNER_ID_RAW:
+    raise RuntimeError(
+        "OWNER_ID environment variable is missing. "
+        "Add OWNER_ID=1519015243710201927 to Railway Variables."
+    )
+
+try:
+    OWNER_ID = int(OWNER_ID_RAW)
+except ValueError:
+    raise RuntimeError(
+        "OWNER_ID must be a valid Discord user ID."
+    )
 
 PREFIX = "."
 
-# Simulated exchange rates.
-# These are only used for the fake/test balance system.
+# Simulated rates only.
+# $100 = 1 LTC
+# $200 = 1 SOL
 SIMULATED_RATES = {
-    "ltc": 100.0,   # $100 = 1 LTC
-    "sol": 200.0,   # $200 = 1 SOL
+    "ltc": 100.0,
+    "sol": 200.0,
 }
 
-# Simulated balances:
-# {user_id: {"ltc": amount, "sol": amount}}
+
+# =========================================================
+# MEMORY STORAGE
+# =========================================================
+
+# {
+#     user_id: {
+#         "ltc": 0.0,
+#         "sol": 0.0
+#     }
+# }
 balances = {}
 
 # Active rain events
@@ -48,7 +77,7 @@ bot = commands.Bot(
 
 
 # =========================================================
-# HELPERS
+# BALANCE HELPERS
 # =========================================================
 
 def get_balance(user_id):
@@ -70,7 +99,10 @@ def crypto_to_usd(amount, crypto):
 
 
 def parse_usd(value):
-    value = value.lower().strip()
+    if value is None:
+        return None
+
+    value = str(value).lower().strip()
 
     if value.endswith("$"):
         value = value[:-1]
@@ -79,7 +111,7 @@ def parse_usd(value):
 
     try:
         amount = float(value)
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
     if amount <= 0:
@@ -92,25 +124,88 @@ def format_crypto(amount):
     return f"{amount:.8f}".rstrip("0").rstrip(".")
 
 
-def is_owner(ctx):
-    return ctx.author.id == OWNER_ID
+def parse_time(value):
+    if value is None:
+        return None
 
+    value = str(value).lower().strip()
+
+    try:
+        if value.endswith("s"):
+            seconds = int(float(value[:-1]))
+
+        elif value.endswith("m"):
+            seconds = int(float(value[:-1]) * 60)
+
+        elif value.endswith("h"):
+            seconds = int(float(value[:-1]) * 3600)
+
+        else:
+            return None
+
+    except (ValueError, TypeError):
+        return None
+
+    if seconds <= 0:
+        return None
+
+    # Maximum 5 hours
+    if seconds > 5 * 60 * 60:
+        return None
+
+    return seconds
+
+
+def format_time(seconds):
+    if seconds >= 3600:
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+
+        if minutes:
+            return f"{hours}h {minutes}m"
+
+        return f"{hours}h"
+
+    if seconds >= 60:
+        minutes = seconds // 60
+        remaining = seconds % 60
+
+        if remaining:
+            return f"{minutes}m {remaining}s"
+
+        return f"{minutes}m"
+
+    return f"{seconds}s"
+
+
+# =========================================================
+# OWNER CHECK
+# =========================================================
 
 def owner_only():
     async def predicate(ctx):
-        return is_owner(ctx)
+        if ctx.author.id != OWNER_ID:
+            raise commands.CheckFailure(
+                "You are not authorized to use this command."
+            )
+
+        return True
 
     return commands.check(predicate)
 
 
 # =========================================================
-# EVENTS
+# READY
 # =========================================================
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user} ({bot.user.id})")
+    print("=" * 50)
+    print(f"Logged in as: {bot.user}")
+    print(f"Bot ID: {bot.user.id}")
+    print(f"Owner ID: {OWNER_ID}")
     print("Simulated crypto bot is online.")
+    print("=" * 50)
 
 
 # =========================================================
@@ -119,9 +214,12 @@ async def on_ready():
 
 @bot.command(name="help")
 async def help_command(ctx):
+
     embed = discord.Embed(
         title="Crypto Bot",
-        description="crypto balance and exchange commands.",
+        description=(
+            "Simulated crypto balance and transfer commands."
+        ),
         color=discord.Color.blurple()
     )
 
@@ -129,11 +227,11 @@ async def help_command(ctx):
         name="Balance",
         value=(
             "`.bal`\n"
-            "Shows all  crypto balances.\n\n"
+            "Shows all simulated crypto balances.\n\n"
             "`.bal ltc`\n"
-            "Shows Litecoin balance.\n\n"
+            "Shows your simulated Litecoin balance.\n\n"
             "`.bal sol`\n"
-            "Shows Solana balance."
+            "Shows your simulated Solana balance."
         ),
         inline=False
     )
@@ -142,9 +240,9 @@ async def help_command(ctx):
         name="Transfers",
         value=(
             "`.tip @user 1$ ltc`\n"
-            "Send a LTC tip.\n\n"
+            "Send a simulated Litecoin tip.\n\n"
             "`.tip @user 1$ sol`\n"
-            "Send a SOL tip."
+            "Send a simulated Solana tip."
         ),
         inline=False
     )
@@ -153,16 +251,18 @@ async def help_command(ctx):
         name="Other",
         value=(
             "`.deposit`\n"
-            "Open the deposit information panel.\n\n"
+            "Open simulated deposit information.\n\n"
             "`.withdraw`\n"
-            "Attempt a withdrawal.\n\n"
+            "Show the simulated withdrawal system status.\n\n"
             "`.rain 10$ 30m`\n"
-            "Create a rain event."
+            "Create a simulated rain event."
         ),
         inline=False
     )
 
-    embed.set_footer(text=" SYSTEM — cryptocurrency is transferred.")
+    embed.set_footer(
+        text="SIMULATED SYSTEM — No real cryptocurrency is transferred."
+    )
 
     await ctx.send(embed=embed)
 
@@ -173,9 +273,15 @@ async def help_command(ctx):
 
 @bot.command(name="bal")
 async def balance_command(ctx, crypto=None):
+
     user_balance = get_balance(ctx.author.id)
 
+    # -------------------------
+    # ALL BALANCES
+    # -------------------------
+
     if crypto is None:
+
         ltc = user_balance["ltc"]
         sol = user_balance["sol"]
 
@@ -213,12 +319,18 @@ async def balance_command(ctx, crypto=None):
             inline=False
         )
 
-        embed.set_footer(text="BALANCE")
+        embed.set_footer(
+            text="SIMULATED BALANCE"
+        )
 
         await ctx.send(embed=embed)
         return
 
-    crypto = crypto.lower()
+    # -------------------------
+    # SPECIFIC BALANCE
+    # -------------------------
+
+    crypto = crypto.lower().strip()
 
     if crypto not in ("ltc", "sol"):
         await ctx.send(
@@ -229,8 +341,12 @@ async def balance_command(ctx, crypto=None):
     amount = user_balance[crypto]
     usd = crypto_to_usd(amount, crypto)
 
-    name = "Litecoin" if crypto == "ltc" else "Solana"
-    symbol = "LTC" if crypto == "ltc" else "SOL"
+    if crypto == "ltc":
+        name = "Litecoin"
+        symbol = "LTC"
+    else:
+        name = "Solana"
+        symbol = "SOL"
 
     embed = discord.Embed(
         title=f"{ctx.author.display_name}'s {name} Balance",
@@ -246,7 +362,9 @@ async def balance_command(ctx, crypto=None):
         inline=False
     )
 
-    embed.set_footer(text=" BALANCE")
+    embed.set_footer(
+        text="SIMULATED BALANCE"
+    )
 
     await ctx.send(embed=embed)
 
@@ -256,7 +374,13 @@ async def balance_command(ctx, crypto=None):
 # =========================================================
 
 @bot.command(name="tip")
-async def tip_command(ctx, member: discord.Member = None, amount=None, crypto=None):
+async def tip_command(
+    ctx,
+    member: discord.Member = None,
+    amount=None,
+    crypto=None
+):
+
     if member is None or amount is None or crypto is None:
         await ctx.send(
             "Usage: `.tip @user 1$ ltc`"
@@ -264,14 +388,18 @@ async def tip_command(ctx, member: discord.Member = None, amount=None, crypto=No
         return
 
     if member.bot:
-        await ctx.send("You cannot tip a bot.")
+        await ctx.send(
+            "You cannot tip a bot."
+        )
         return
 
     if member.id == ctx.author.id:
-        await ctx.send("You cannot tip yourself.")
+        await ctx.send(
+            "You cannot tip yourself."
+        )
         return
 
-    crypto = crypto.lower()
+    crypto = crypto.lower().strip()
 
     if crypto not in ("ltc", "sol"):
         await ctx.send(
@@ -290,16 +418,21 @@ async def tip_command(ctx, member: discord.Member = None, amount=None, crypto=No
     sender_balance = get_balance(ctx.author.id)
     receiver_balance = get_balance(member.id)
 
-    crypto_amount = usd_to_crypto(usd, crypto)
+    crypto_amount = usd_to_crypto(
+        usd,
+        crypto
+    )
 
     if sender_balance[crypto] < crypto_amount:
+
         available_usd = crypto_to_usd(
             sender_balance[crypto],
             crypto
         )
 
         await ctx.send(
-            f"You do not have enough {crypto.upper()}.\n"
+            f"You do not have enough simulated "
+            f"{crypto.upper()}.\n"
             f"Available: `${available_usd:.2f}`"
         )
         return
@@ -316,10 +449,13 @@ async def tip_command(ctx, member: discord.Member = None, amount=None, crypto=No
         f"{ctx.author.mention} tipped {member.mention}\n\n"
         f"Amount: `${usd:.2f}`\n"
         f"Asset: `{crypto.upper()}`\n"
-        f"Simulated amount: `{format_crypto(crypto_amount)} {crypto.upper()}`"
+        f"Simulated amount: "
+        f"`{format_crypto(crypto_amount)} {crypto.upper()}`"
     )
 
-    embed.set_footer(text=" TRANSFER")
+    embed.set_footer(
+        text="SIMULATED TRANSFER"
+    )
 
     await ctx.send(embed=embed)
 
@@ -330,30 +466,34 @@ async def tip_command(ctx, member: discord.Member = None, amount=None, crypto=No
 
 @bot.command(name="withdraw")
 async def withdraw_command(ctx):
+
     embed = discord.Embed(
         title="Withdrawal Error",
         color=discord.Color.red()
     )
 
     embed.description = (
-        "The withdrawal service is currently unavailable.\n\n"
+        "The simulated withdrawal service is currently unavailable.\n\n"
         "Error Code: `CRYPTO-NETWORK-SYNC-503`\n\n"
-        "The global settlement layer failed to synchronize with "
-        "the required network verification nodes. Your"
-        "balance has not been changed.\n\n"
+        "The simulated settlement layer failed to synchronize "
+        "with the required network verification nodes.\n\n"
+        "Your simulated balance has not been changed.\n\n"
         "Please retry in a few hours."
     )
 
-    embed.set_footer(text=" SYSTEM ERROR")
+    embed.set_footer(
+        text="SIMULATED SYSTEM ERROR"
+    )
 
     await ctx.send(embed=embed)
 
 
 # =========================================================
-# DEPOSIT BUTTONS
+# DEPOSIT BUTTON VIEW
 # =========================================================
 
 class DepositView(discord.ui.View):
+
     def __init__(self):
         super().__init__(timeout=300)
 
@@ -366,19 +506,24 @@ class DepositView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
+
         embed = discord.Embed(
             title="Solana Deposit",
             color=discord.Color.blurple()
         )
 
         embed.description = (
-            "**/ ONLY Solana **\n\n"
+            "**SIMULATED / TEST ONLY**\n\n"
             "Solana address:\n"
             "```text\n"
             "43iwsPQnwKuGD7HsPVfxsfMTVD36f3z1qmECFxGxnoC8\n"
             "```\n\n"
-            "Expires in 1 Day"
-            "Minimum 0.10$ Deposit."
+            "This address is displayed only for the bot "
+            "simulation. Do not send real funds."
+        )
+
+        embed.set_footer(
+            text="SIMULATED DEPOSIT"
         )
 
         await interaction.response.edit_message(
@@ -395,19 +540,24 @@ class DepositView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
+
         embed = discord.Embed(
             title="Litecoin Deposit",
             color=discord.Color.blurple()
         )
 
         embed.description = (
-            "** / ONLY LTC**\n\n"
+            "**SIMULATED / TEST ONLY**\n\n"
             "Litecoin address:\n"
             "```text\n"
             "ltc1qcq2l6h5r0drx0hsg3796rk0phdtmq2fmjhh80s\n"
             "```\n\n"
-            "Expires in 1 Day"
-            "Minimum 0.10$ Deposit."
+            "This address is displayed only for the bot "
+            "simulation. Do not send real funds."
+        )
+
+        embed.set_footer(
+            text="SIMULATED DEPOSIT"
         )
 
         await interaction.response.edit_message(
@@ -416,81 +566,52 @@ class DepositView(discord.ui.View):
         )
 
 
+# =========================================================
+# DEPOSIT
+# =========================================================
+
 @bot.command(name="deposit")
 async def deposit_command(ctx):
-    try:
-        embed = discord.Embed(
-            title="Deposit",
-            description=(
-                "Your deposit options are available in your DMs.\n\n"
-                "Select an asset below."
-            ),
-            color=discord.Color.blurple()
-        )
 
-        embed.set_footer(text="Deposit SYSTEM")
+    embed = discord.Embed(
+        title="Deposit",
+        description=(
+            "Your simulated deposit options are available "
+            "in your DMs.\n\n"
+            "Select an asset below."
+        ),
+        color=discord.Color.blurple()
+    )
+
+    embed.set_footer(
+        text="SIMULATED SYSTEM"
+    )
+
+    try:
 
         await ctx.author.send(
             embed=embed,
             view=DepositView()
         )
 
-        await ctx.send("**Check Your DMs**")
+        await ctx.send(
+            "**Check Your DMs**"
+        )
 
     except discord.Forbidden:
+
         await ctx.send(
-            "I could not send you a DM. Please enable DMs from this server."
+            "I could not send you a DM. "
+            "Please enable DMs from this server."
         )
 
 
 # =========================================================
-# RAIN
+# RAIN VIEW
 # =========================================================
 
-def parse_time(value):
-    value = value.lower().strip()
-
-    try:
-        if value.endswith("s"):
-            seconds = int(float(value[:-1]))
-        elif value.endswith("m"):
-            seconds = int(float(value[:-1]) * 60)
-        elif value.endswith("h"):
-            seconds = int(float(value[:-1]) * 3600)
-        else:
-            return None
-    except ValueError:
-        return None
-
-    if seconds <= 0 or seconds > 5 * 60 * 60:
-        return None
-
-    return seconds
-
-
-def format_time(seconds):
-    if seconds >= 3600:
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
-
-        if minutes:
-            return f"{hours}h {minutes}m"
-
-        return f"{hours}h"
-
-    if seconds >= 60:
-        minutes = seconds // 60
-        remaining = seconds % 60
-
-        if remaining:
-            return f"{minutes}m {remaining}s"
-
-        return f"{minutes}m"
-
-    return f"{seconds}s"
-
-
 class RainView(discord.ui.View):
+
     def __init__(
         self,
         rain_id,
@@ -516,6 +637,7 @@ class RainView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
+
         rain = active_rain.get(self.rain_id)
 
         if rain is None:
@@ -526,6 +648,7 @@ class RainView(discord.ui.View):
             return
 
         if datetime.utcnow() >= rain["end_time"]:
+
             await interaction.response.send_message(
                 "This rain has already ended.",
                 ephemeral=True
@@ -533,6 +656,7 @@ class RainView(discord.ui.View):
             return
 
         if interaction.user.bot:
+
             await interaction.response.send_message(
                 "Bots cannot join rain.",
                 ephemeral=True
@@ -540,28 +664,33 @@ class RainView(discord.ui.View):
             return
 
         if interaction.user.id in rain["participants"]:
+
             await interaction.response.send_message(
                 "You have already joined this rain.",
                 ephemeral=True
             )
             return
 
-        rain["participants"].add(interaction.user.id)
+        rain["participants"].add(
+            interaction.user.id
+        )
 
         await interaction.response.send_message(
-            "You joined the rain.",
+            "You joined the simulated rain.",
             ephemeral=True
         )
 
-        try:
-            await interaction.message.edit(
-                view=self
-            )
-        except discord.HTTPException:
-            pass
 
+# =========================================================
+# FINISH RAIN
+# =========================================================
 
-async def finish_rain(rain_id, channel, message_id):
+async def finish_rain(
+    rain_id,
+    channel,
+    message_id
+):
+
     rain = active_rain.get(rain_id)
 
     if rain is None:
@@ -574,34 +703,58 @@ async def finish_rain(rain_id, channel, message_id):
     if remaining > 0:
         await asyncio.sleep(remaining)
 
-    rain = active_rain.pop(rain_id, None)
+    rain = active_rain.pop(
+        rain_id,
+        None
+    )
 
     if rain is None:
         return
 
-    participants = list(rain["participants"])
+    participants = list(
+        rain["participants"]
+    )
 
+    # Nobody joined
     if not participants:
-        owner_balance = get_balance(rain["owner_id"])
-        owner_balance[rain["crypto"]] += rain["crypto_amount"]
+
+        owner_balance = get_balance(
+            rain["owner_id"]
+        )
+
+        owner_balance[
+            rain["crypto"]
+        ] += rain["crypto_amount"]
 
         result = discord.Embed(
             title="Rain Ended",
-            description=(
-                "Nobody joined the rain.\n\n"
-                f"The full `{format_crypto(rain['crypto_amount'])} "
-                f"{rain['crypto'].upper()}` has been returned."
-            ),
             color=discord.Color.orange()
         )
 
+        result.description = (
+            "Nobody joined the simulated rain.\n\n"
+            f"The full "
+            f"`{format_crypto(rain['crypto_amount'])} "
+            f"{rain['crypto'].upper()}` "
+            "has been returned."
+        )
+
+    # People joined
     else:
+
         total = rain["crypto_amount"]
+
         each = total / len(participants)
 
         for user_id in participants:
-            user_balance = get_balance(user_id)
-            user_balance[rain["crypto"]] += each
+
+            user_balance = get_balance(
+                user_id
+            )
+
+            user_balance[
+                rain["crypto"]
+            ] += each
 
         mentions = " ".join(
             f"<@{user_id}>"
@@ -616,28 +769,42 @@ async def finish_rain(rain_id, channel, message_id):
         result.description = (
             f"Participants: `{len(participants)}`\n"
             f"Prize per participant: "
-            f"`{format_crypto(each)} {rain['crypto'].upper()}`\n\n"
+            f"`{format_crypto(each)} "
+            f"{rain['crypto'].upper()}`\n\n"
             f"{mentions}"
         )
 
-    result.set_footer(text="SIMULATED RAIN")
+    result.set_footer(
+        text="SIMULATED RAIN"
+    )
 
     try:
-        await channel.send(embed=result)
 
-        original_message = await channel.fetch_message(message_id)
+        await channel.send(
+            embed=result
+        )
+
+        original_message = await channel.fetch_message(
+            message_id
+        )
 
         try:
-            await original_message.edit(view=None)
+            await original_message.edit(
+                view=None
+            )
         except discord.HTTPException:
             pass
 
     except discord.HTTPException:
         pass
 
+# =========================================================
+# RAIN COMMAND
+# =========================================================
 
 @bot.command(name="rain")
 async def rain_command(ctx, amount=None, duration=None):
+
     if amount is None or duration is None:
         await ctx.send(
             "Usage: `.rain 10$ 30m`"
@@ -656,18 +823,23 @@ async def rain_command(ctx, amount=None, duration=None):
 
     if seconds is None:
         await ctx.send(
-            "Invalid time. Use seconds, minutes, or hours, with a maximum of 5 hours.\n"
+            "Invalid time. Maximum rain duration is 5 hours.\n"
             "Example: `.rain 10$ 30m`"
         )
         return
 
-    # Rain uses SOL as the simulated prize asset by default.
+    # Rain uses simulated SOL
     crypto = "sol"
 
     user_balance = get_balance(ctx.author.id)
-    crypto_amount = usd_to_crypto(usd, crypto)
+
+    crypto_amount = usd_to_crypto(
+        usd,
+        crypto
+    )
 
     if user_balance[crypto] < crypto_amount:
+
         available_usd = crypto_to_usd(
             user_balance[crypto],
             crypto
@@ -675,19 +847,28 @@ async def rain_command(ctx, amount=None, duration=None):
 
         await ctx.send(
             f"You do not have enough simulated SOL.\n"
+            f"Required: `${usd:.2f}`\n"
             f"Available: `${available_usd:.2f}`"
         )
         return
 
+    # Deduct rain amount immediately
     user_balance[crypto] -= crypto_amount
 
-    rain_id = random.randint(100000000, 999999999)
+    rain_id = random.randint(
+        100000000,
+        999999999
+    )
 
     while rain_id in active_rain:
-        rain_id = random.randint(100000000, 999999999)
+        rain_id = random.randint(
+            100000000,
+            999999999
+        )
 
-    end_time = datetime.utcnow() + timedelta(
-        seconds=seconds
+    end_time = (
+        datetime.utcnow()
+        + timedelta(seconds=seconds)
     )
 
     active_rain[rain_id] = {
@@ -706,7 +887,7 @@ async def rain_command(ctx, amount=None, duration=None):
 
     embed.description = (
         f"{ctx.author.mention} started a simulated rain.\n\n"
-        f"Prize: `${usd:.2f}` USD\n"
+        f"Prize: `${usd:.2f} USD`\n"
         f"Asset: `SOL`\n"
         f"Duration: `{format_time(seconds)}`\n"
         f"Ends: <t:{int(end_time.timestamp())}:R>\n\n"
@@ -738,10 +919,12 @@ async def rain_command(ctx, amount=None, duration=None):
         )
     )
 
+
 # =========================================================
 # ADD BALANCE
 # OWNER ONLY
 # =========================================================
+
 @bot.command(name="addbal")
 @owner_only()
 async def add_balance_command(
@@ -750,13 +933,14 @@ async def add_balance_command(
     amount=None,
     crypto=None
 ):
+
     if member is None or amount is None or crypto is None:
         await ctx.send(
             "Usage: `.addbal @user 10$ sol`"
         )
         return
 
-    crypto = crypto.lower()
+    crypto = crypto.lower().strip()
 
     if crypto not in ("ltc", "sol"):
         await ctx.send(
@@ -768,14 +952,24 @@ async def add_balance_command(
 
     if usd is None:
         await ctx.send(
-            "Invalid amount."
+            "Invalid amount. Example: `10$`."
         )
         return
 
-    crypto_amount = usd_to_crypto(usd, crypto)
+    crypto_amount = usd_to_crypto(
+        usd,
+        crypto
+    )
 
-    user_balance = get_balance(member.id)
+    user_balance = get_balance(
+        member.id
+    )
+
+    old_balance = user_balance[crypto]
+
     user_balance[crypto] += crypto_amount
+
+    new_balance = user_balance[crypto]
 
     embed = discord.Embed(
         title="Balance Added",
@@ -784,15 +978,26 @@ async def add_balance_command(
 
     embed.description = (
         f"User: {member.mention}\n"
-        f"Added: `${usd:.2f}` USD\n"
+        f"Added: `${usd:.2f} USD`\n"
         f"Asset: `{crypto.upper()}`\n"
-        f"Simulated amount: "
-        f"`{format_crypto(crypto_amount)} {crypto.upper()}`"
+        f"Added amount: "
+        f"`{format_crypto(crypto_amount)} "
+        f"{crypto.upper()}`\n\n"
+        f"Previous balance: "
+        f"`{format_crypto(old_balance)} "
+        f"{crypto.upper()}`\n"
+        f"New balance: "
+        f"`{format_crypto(new_balance)} "
+        f"{crypto.upper()}`"
     )
 
-    embed.set_footer(text="OWNER CONTROL")
+    embed.set_footer(
+        text="OWNER CONTROL"
+    )
 
-    await ctx.send(embed=embed)
+    await ctx.send(
+        embed=embed
+    )
 
 
 # =========================================================
@@ -808,13 +1013,14 @@ async def remove_balance_command(
     amount=None,
     crypto=None
 ):
+
     if member is None or amount is None or crypto is None:
         await ctx.send(
             "Usage: `.removebal @user 10$ sol`"
         )
         return
 
-    crypto = crypto.lower()
+    crypto = crypto.lower().strip()
 
     if crypto not in ("ltc", "sol"):
         await ctx.send(
@@ -826,22 +1032,38 @@ async def remove_balance_command(
 
     if usd is None:
         await ctx.send(
-            "Invalid amount."
+            "Invalid amount. Example: `10$`."
         )
         return
 
-    crypto_amount = usd_to_crypto(usd, crypto)
+    crypto_amount = usd_to_crypto(
+        usd,
+        crypto
+    )
 
-    user_balance = get_balance(member.id)
+    user_balance = get_balance(
+        member.id
+    )
 
     if user_balance[crypto] < crypto_amount:
+
+        available_usd = crypto_to_usd(
+            user_balance[crypto],
+            crypto
+        )
+
         await ctx.send(
-            f"{member.mention} does not have enough simulated "
-            f"{crypto.upper()}."
+            f"{member.mention} does not have enough "
+            f"simulated {crypto.upper()}.\n"
+            f"Available: `${available_usd:.2f}`"
         )
         return
 
+    old_balance = user_balance[crypto]
+
     user_balance[crypto] -= crypto_amount
+
+    new_balance = user_balance[crypto]
 
     embed = discord.Embed(
         title="Balance Removed",
@@ -850,19 +1072,30 @@ async def remove_balance_command(
 
     embed.description = (
         f"User: {member.mention}\n"
-        f"Removed: `${usd:.2f}` USD\n"
+        f"Removed: `${usd:.2f} USD`\n"
         f"Asset: `{crypto.upper()}`\n"
-        f"Simulated amount: `{format_crypto(crypto_amount)} "
+        f"Removed amount: "
+        f"`{format_crypto(crypto_amount)} "
+        f"{crypto.upper()}`\n\n"
+        f"Previous balance: "
+        f"`{format_crypto(old_balance)} "
+        f"{crypto.upper()}`\n"
+        f"New balance: "
+        f"`{format_crypto(new_balance)} "
         f"{crypto.upper()}`"
     )
 
-    embed.set_footer(text="OWNER CONTROL")
+    embed.set_footer(
+        text="OWNER CONTROL"
+    )
 
-    await ctx.send(embed=embed)
+    await ctx.send(
+        embed=embed
+    )
 
 
 # =========================================================
-# HIDE ADMIN COMMANDS FROM PUBLIC HELP
+# HIDE ADMIN COMMANDS FROM HELP
 # =========================================================
 
 bot.remove_command("addbal")
@@ -870,59 +1103,93 @@ bot.remove_command("removebal")
 
 
 # =========================================================
-# ERROR HANDLING
+# OWNER COMMAND ERROR
 # =========================================================
 
 @add_balance_command.error
 @remove_balance_command.error
-async def owner_command_error(ctx, error):
-    if isinstance(error, commands.CheckFailure):
-        await ctx.send(
-            "You do not have permission to use this command."
-        )
+async def owner_command_error(
+    ctx,
+    error
+):
 
+    if isinstance(
+        error,
+        commands.CheckFailure
+    ):
+        await ctx.send(
+            "You are not authorized to use this command."
+        )
+        return
+
+    print(
+        f"Owner command error: {error}"
+    )
+
+
+# =========================================================
+# GENERAL COMMAND ERROR
+# =========================================================
 
 @bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
+async def on_command_error(
+    ctx,
+    error
+):
+
+    if isinstance(
+        error,
+        commands.CommandNotFound
+    ):
         return
 
-    if isinstance(error, commands.MissingRequiredArgument):
+    if isinstance(
+        error,
+        commands.CheckFailure
+    ):
         await ctx.send(
-            "Missing required argument. Use `.help` to see the commands."
+            "You are not authorized to use this command."
         )
         return
 
-    if isinstance(error, commands.MemberNotFound):
+    if isinstance(
+        error,
+        commands.MissingRequiredArgument
+    ):
+        await ctx.send(
+            "Missing required argument. "
+            "Use `.help` to see the commands."
+        )
+        return
+
+    if isinstance(
+        error,
+        commands.MemberNotFound
+    ):
         await ctx.send(
             "User not found. Please mention a valid server member."
         )
         return
 
-    if isinstance(error, commands.BadArgument):
+    if isinstance(
+        error,
+        commands.BadArgument
+    ):
         await ctx.send(
-            "Invalid command argument. Use `.help` for command usage."
+            "Invalid command argument. "
+            "Use `.help` for command usage."
         )
         return
 
-    if isinstance(error, commands.CheckFailure):
-        return
-
-    print(f"Command error: {error}")
+    print(
+        f"Command error: {error}"
+    )
 
 
 # =========================================================
-# START
+# START BOT
 # =========================================================
 
-if not TOKEN:
-    raise RuntimeError(
-        "BOT_TOKEN environment variable is missing."
-    )
-
-if OWNER_ID == 0:
-    raise RuntimeError(
-        "OWNER_ID environment variable is missing."
-    )
+print("Starting crypto bot...")
 
 bot.run(TOKEN)
